@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Combat sports equipment and apparel item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "brand": { "type": "string" },
+        "category": { "type": "string" },
+        "sport": { "type": "string" },
+        "targetLevel": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "stock": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "isNew": { "type": "boolean" },
+        "isBestSeller": { "type": "boolean" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "sizes": { "type": "array", "items": { "type": "string" } },
+        "shortDesc": { "type": "string" },
+        "fullDesc": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "specs": { "type": "object" },
+        "reviews": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["id", "name", "slug", "brand", "category", "sport", "price", "images", "sizes"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "shipping", "completed", "cancelled"] },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "paid"] },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "shippingInfo": { "type": "object" },
+        "subtotal": { "type": "number" },
+        "shippingFee": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "total": { "type": "number" },
+        "updatedAt": { "type": "string" },
+        "notes": { "type": "string" },
+        "adminNotes": { "type": "string" },
+        "userId": { "type": ["string", "null"] },
+        "customerEmail": { "type": "string" }
+      },
+      "required": ["orderId", "createdAt", "status", "items", "shippingInfo", "total"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized administrator profile for store management",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "super_admin"] },
+        "displayName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "entity": "Product",
+      "description": "Collection of sports products and combat equipment"
+    },
+    "/orders/{orderId}": {
+      "entity": "Order",
+      "description": "Customer orders with items, addresses, and fulfillment statuses"
+    },
+    "/admins/{adminId}": {
+      "entity": "Admin",
+      "description": "Registered administrators with access to the management console"
+    }
+  }
+}

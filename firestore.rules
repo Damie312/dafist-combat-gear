@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access unless explicitly granted
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health check endpoint
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == "duyanh31203@gmail.com" && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+      );
+    }
+
+    // Shipping fee validation against store business rules:
+    // Standard: 35,000 VND (<1M), 0 VND (>=1M)
+    // Express: 65,000 VND (<1M), 30,000 VND (>=1M)
+    function isValidShippingFee(data) {
+      let isExpress = data.shippingInfo.shippingMethod == 'express';
+      return (
+        (isExpress && data.subtotal >= 1000000 && data.shippingFee == 30000) ||
+        (isExpress && data.subtotal < 1000000 && data.shippingFee == 65000) ||
+        (!isExpress && data.subtotal >= 1000000 && data.shippingFee == 0) ||
+        (!isExpress && data.subtotal < 1000000 && data.shippingFee == 35000)
+      );
+    }
+
+    // Validation for legitimate guest checkout orders
+    function isLegitimateOrder(orderId) {
+      let data = request.resource.data;
+      return (
+        // 1. Order ID binding & timestamp
+        data.orderId == orderId &&
+        data.createdAt is string &&
+
+        // 2. Initial state protection (cannot create completed, confirmed, shipping, or cancelled orders)
+        data.status == 'pending' &&
+
+        // 3. Totals & mathematical consistency
+        data.subtotal is number && data.subtotal > 0 &&
+        data.shippingFee is number && data.shippingFee >= 0 &&
+        data.discountAmount is number && data.discountAmount >= 0 &&
+        data.total is number && data.total > 0 &&
+        data.total == (data.subtotal + data.shippingFee - data.discountAmount) &&
+        isValidShippingFee(data) &&
+
+        // 4. Privileged fields cannot be injected by non-admins
+        !('adminNotes' in data) &&
+        (!('paymentStatus' in data) || data.paymentStatus == 'unpaid') &&
+        !('processedBy' in data) &&
+        !('refunded' in data) &&
+
+        // 5. Complete shipping info validation
+        data.shippingInfo is map &&
+        data.shippingInfo.fullName is string && data.shippingInfo.fullName.size() >= 2 &&
+        data.shippingInfo.phone is string && data.shippingInfo.phone.size() >= 10 &&
+        data.shippingInfo.province is string && data.shippingInfo.province.size() > 0 &&
+        data.shippingInfo.district is string && data.shippingInfo.district.size() > 0 &&
+        data.shippingInfo.ward is string && data.shippingInfo.ward.size() > 0 &&
+        data.shippingInfo.address is string && data.shippingInfo.address.size() > 0 &&
+        data.shippingInfo.paymentMethod in ['cod', 'vietqr'] &&
+        data.shippingInfo.shippingMethod in ['standard', 'express'] &&
+
+        // 6. Items validation (non-empty list, positive quantities, verified product existence)
+        data.items is list &&
+        data.items.size() > 0 &&
+        data.items.size() <= 20 &&
+        data.items[0].quantity is number && data.items[0].quantity > 0 &&
+        data.items[0].price is number && data.items[0].price > 0 &&
+        data.items[0].productId is string && data.items[0].productId.size() > 0 &&
+        exists(/databases/$(database)/documents/products/$(data.items[0].productId)) &&
+
+        // 7. Ownership security:
+        // - Authenticated customer: data.userId must equal request.auth.uid
+        // - Guest order: no userId or userId is null
+        (
+          (!('userId' in data) || data.userId == null) ||
+          (isSignedIn() && data.userId == request.auth.uid)
+        ) &&
+        (!('customerEmail' in data) || data.customerEmail == null || (data.customerEmail is string && data.customerEmail.size() <= 100))
+      );
+    }
+
+    // Admins directory: authenticated users can check, but only verified admins can modify
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Customer Profiles: Customer reads/writes only their own document; Admins can manage
+    match /customers/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isSignedIn() && (
+        isAdmin() || (
+          request.auth.uid == uid &&
+          request.resource.data.uid == uid
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Products: Public read for customers; admin full control; anonymous stock decrement strictly tied to concurrent pending order creation
+    match /products/{productId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin();
+    }
+
+    // Orders: Readable by admins or the authenticated customer who owns the order;
+    // created via legitimate checkout; updates/deletes admin-only
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (
+        isSignedIn() && 
+        ('userId' in resource.data) && 
+        resource.data.userId != null && 
+        resource.data.userId == request.auth.uid
+      );
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+  }
+}

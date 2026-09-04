@@ -1,0 +1,6 @@
+{
+  "name": "DAFIST - Dụng Cụ Boxing & Võ Thuật Cao Cấp",
+  "description": "Website thương mại điện tử chuyên cung cấp găng tay boxing, bảo hộ MMA, Muay Thai và dụng cụ võ thuật cao cấp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
